@@ -35,6 +35,7 @@
         .stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; background-image: radial-gradient(2px 2px at 10% 20%, #fff, rgba(0,0,0,0)), radial-gradient(2px 2px at 30% 60%, #ddd, rgba(0,0,0,0)), radial-gradient(3px 3px at 70% 30%, #fff, rgba(0,0,0,0)), radial-gradient(2px 2px at 90% 80%, #ccc, rgba(0,0,0,0)); background-repeat: repeat; background-size: 300px 300px; animation: twinkle 3s infinite alternate; }
         @keyframes twinkle { 0% { opacity: 0.3; } 100% { opacity: 1; } }
 
+        /* 開場畫面 */
         #intro-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
@@ -50,6 +51,17 @@
         #btn-start-adventure:disabled { background: gray; animation: none; cursor: not-allowed; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(230, 126, 34, 0.7); } 70% { box-shadow: 0 0 0 20px rgba(230, 126, 34, 0); } 100% { box-shadow: 0 0 0 0 rgba(230, 126, 34, 0); } }
 
+        /* 最終排行榜畫面 (新增) */
+        #final-ranking-screen {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(5, 10, 21, 0.95); backdrop-filter: blur(10px); z-index: 200;
+            flex-direction: column; justify-content: center; align-items: center;
+        }
+        #final-ranking-screen h1 { font-size: 60px; color: var(--text-gold); margin-bottom: 30px; text-shadow: 0 0 20px rgba(245, 215, 110, 0.8); letter-spacing: 3px;}
+        #ranking-container { display: flex; flex-direction: column; gap: 15px; width: 70%; max-width: 900px; margin-bottom: 30px; }
+        #btn-reveal-rank { font-size: 28px; padding: 15px 40px; background: var(--btn-purple); color: white; border: none; border-radius: 50px; cursor: pointer; font-weight: bold; box-shadow: 0 5px 15px rgba(155, 89, 182, 0.6); transition: 0.3s; }
+        #btn-reveal-rank:hover { transform: scale(1.05); }
+
         .main-header { color: var(--text-gold); text-align: center; margin: 0 0 15px 0; font-size: 32px; letter-spacing: 2px; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8); }
         
         .layout-wrapper { display: none; gap: 20px; height: calc(100% - 60px); opacity: 0; transition: opacity 1s ease-in; }
@@ -61,26 +73,12 @@
         #question-box { font-size: 32px; font-weight: bold; color: #fff; min-height: 120px; line-height: 1.4; border-left: 5px solid var(--text-gold); padding-left: 15px; text-shadow: 1px 1px 3px rgba(0,0,0,0.8);}
         
         .train-car {
-            position: relative;
-            background: rgba(0,0,0,0.5);
-            border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 15px 15px 0 0;
-            border-bottom: 5px solid #2c3e50; 
-            margin-bottom: 15px; 
+            position: relative; background: rgba(0,0,0,0.5); border: 2px solid rgba(255,255,255,0.3); border-radius: 15px 15px 0 0; border-bottom: 5px solid #2c3e50; margin-bottom: 15px; 
         }
         .train-car::before, .train-car::after {
-            content: '';
-            position: absolute;
-            bottom: -15px;
-            width: 25px;
-            height: 25px;
-            background: #222;
-            border: 2px solid #7f8c8d;
-            border-radius: 50%;
-            box-shadow: inset 0 0 5px rgba(0,0,0,1);
+            content: ''; position: absolute; bottom: -15px; width: 25px; height: 25px; background: #222; border: 2px solid #7f8c8d; border-radius: 50%; box-shadow: inset 0 0 5px rgba(0,0,0,1);
         }
-        .train-car::before { left: 15%; }
-        .train-car::after { right: 15%; }
+        .train-car::before { left: 15%; } .train-car::after { right: 15%; }
 
         .options { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; flex-grow: 1; margin-bottom: 10px;}
         .option { padding: 15px; font-size: 24px; display: flex; align-items: center; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
@@ -112,6 +110,13 @@
         <h1>🚂 飛天夢想列車</h1>
         <h2>夢想列車長の最終考核</h2>
         <button id="btn-start-adventure" onclick="startAdventure()" disabled>題庫讀取中...</button>
+    </div>
+
+    <div id="final-ranking-screen">
+        <h1>🏆 最終榮耀排行榜 🏆</h1>
+        <div id="ranking-container">
+            </div>
+        <button id="btn-reveal-rank" onclick="revealNextRank()">揭曉下一名</button>
     </div>
 
     <h1 class="main-header" id="main-title" style="display:none;">🚂 夢想列車長の最終考核</h1>
@@ -202,9 +207,66 @@
             });
         };
 
+        // --- 新增：排行榜揭曉邏輯 ---
+        let sortedTeamsForReveal = [];
+        let currentRevealIndex = 5; // 從最後一名 (陣列 index 5) 開始揭曉
+
+        function triggerFinalRanking() {
+            // 隱藏遊戲主畫面
+            document.getElementById('game-layout').style.display = 'none';
+            document.getElementById('main-title').style.display = 'none';
+            
+            // 將物件轉為陣列並依照分數由高到低排序： [ ["直升機", 10], ["飛碟", 8]... ]
+            sortedTeamsForReveal = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+            
+            // 顯示排行榜星空背景
+            document.getElementById('final-ranking-screen').style.display = 'flex';
+        }
+
+        function revealNextRank() {
+            if (currentRevealIndex < 0) return;
+
+            const team = sortedTeamsForReveal[currentRevealIndex];
+            const medals = ["🥇 總冠軍", "🥈 亞軍", "🥉 季軍", "🏅 第四名", "🏅 第五名", "🏅 第六名"];
+            const colors = ["#f1c40f", "#bdc3c7", "#cd7f32", "#ecf0f1", "#ecf0f1", "#ecf0f1"];
+
+            const rankDiv = document.createElement('div');
+            // 設定 CSS 動畫效果，讓名次從下方浮現
+            rankDiv.style.cssText = `
+                display: flex; justify-content: space-between; align-items: center; 
+                background: rgba(0,0,0,0.6); padding: 20px 40px; border-radius: 15px; 
+                border-left: 10px solid ${colors[currentRevealIndex]}; box-shadow: 0 5px 15px rgba(0,0,0,0.5); 
+                font-size: 36px; font-weight: bold; width: 100%; opacity: 0; transform: translateY(30px); 
+                transition: all 0.6s ease-out;
+            `;
+
+            rankDiv.innerHTML = `
+                <span style="color: ${colors[currentRevealIndex]}; width: 25%; text-align: left;">${medals[currentRevealIndex]}</span>
+                <span style="color: white; flex-grow: 1; text-align: center; letter-spacing: 2px;">${team[0]}</span>
+                <span style="color: #2ecc71; width: 25%; text-align: right;">${team[1]} 分</span>
+            `;
+
+            // 使用 prepend 讓第一名最終會排在最上面
+            document.getElementById('ranking-container').prepend(rankDiv);
+
+            // 觸發動畫
+            setTimeout(() => {
+                rankDiv.style.opacity = '1';
+                rankDiv.style.transform = 'translateY(0)';
+            }, 50);
+
+            currentRevealIndex--;
+
+            if (currentRevealIndex < 0) {
+                document.getElementById('btn-reveal-rank').style.display = 'none'; // 全部揭曉完就隱藏按鈕
+            }
+        }
+        // ------------------------------
+
         function loadNextQuestion() {
             if(currentIndex >= questions.length - 1) {
                 alert("考核結束！準備看最終排名！");
+                triggerFinalRanking(); // 呼叫新增的排行榜畫面
                 return;
             }
             currentIndex++;
