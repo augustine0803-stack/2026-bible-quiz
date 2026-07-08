@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>夢想列車長最終考核</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        :root {
+            --text-gold: #f5d76e;
+            --text-light: #ecf0f1;
+            --panel-bg: rgba(12, 31, 64, 0.65); 
+            --border-gold: rgba(207, 168, 88, 0.5);
+            --btn-blue: #3498db;
+            --btn-red: #e74c3c;
+            --btn-green: #2ecc71;
+            --btn-purple: #9b59b6;
+        }
+
+        body { 
+            font-family: '微軟正黑體', sans-serif; 
+            background-color: #050a15;
+            background-image: url('bg.jpg');
+            background-size: cover;
+            background-position: center bottom;
+            background-repeat: no-resize;
+            color: var(--text-light); 
+            margin: 0; 
+            padding: 15px; 
+            height: 100vh; 
+            box-sizing: border-box;
+            overflow: hidden; 
+        }
+
+        .stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; background-image: radial-gradient(2px 2px at 10% 20%, #fff, rgba(0,0,0,0)), radial-gradient(2px 2px at 30% 60%, #ddd, rgba(0,0,0,0)), radial-gradient(3px 3px at 70% 30%, #fff, rgba(0,0,0,0)), radial-gradient(2px 2px at 90% 80%, #ccc, rgba(0,0,0,0)); background-repeat: repeat; background-size: 300px 300px; animation: twinkle 3s infinite alternate; }
+        @keyframes twinkle { 0% { opacity: 0.3; } 100% { opacity: 1; } }
+
+        #intro-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: rgba(5, 10, 21, 0.9); 
+            backdrop-filter: blur(5px);
+            z-index: 100;
+            transition: transform 1.5s cubic-bezier(0.5, 0, 1, 1), opacity 1.5s ease-in;
+        }
+        #intro-screen h1 { font-size: 80px; color: var(--text-gold); text-shadow: 0 0 20px rgba(245, 215, 110, 0.8); margin-bottom: 10px;}
+        #intro-screen h2 { font-size: 40px; color: #fff; letter-spacing: 5px; margin-bottom: 50px;}
+        #btn-start-adventure { font-size: 36px; padding: 20px 60px; background: linear-gradient(145deg, #f39c12, #e67e22); color: white; border: none; border-radius: 50px; cursor: pointer; font-weight: bold; box-shadow: 0 10px 30px rgba(230, 126, 34, 0.6); transition: 0.3s; animation: pulse 2s infinite; }
+        #btn-start-adventure:hover { transform: scale(1.05); }
+        #btn-start-adventure:disabled { background: gray; animation: none; cursor: not-allowed; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(230, 126, 34, 0.7); } 70% { box-shadow: 0 0 0 20px rgba(230, 126, 34, 0); } 100% { box-shadow: 0 0 0 0 rgba(230, 126, 34, 0); } }
+
+        .main-header { color: var(--text-gold); text-align: center; margin: 0 0 15px 0; font-size: 32px; letter-spacing: 2px; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8); }
+        
+        .layout-wrapper { display: none; gap: 20px; height: calc(100% - 60px); opacity: 0; transition: opacity 1s ease-in; }
+        .main-panel { flex: 2; display: flex; flex-direction: column; gap: 15px; }
+        .side-panel { flex: 1; display: flex; flex-direction: column; gap: 15px; }
+
+        .panel { background: var(--panel-bg); backdrop-filter: blur(12px); padding: 20px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+        
+        #question-box { font-size: 32px; font-weight: bold; color: #fff; min-height: 120px; line-height: 1.4; border-left: 5px solid var(--text-gold); padding-left: 15px; text-shadow: 1px 1px 3px rgba(0,0,0,0.8);}
+        
+        .train-car {
+            position: relative;
+            background: rgba(0,0,0,0.5);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 15px 15px 0 0;
+            border-bottom: 5px solid #2c3e50; 
+            margin-bottom: 15px; 
+        }
+        .train-car::before, .train-car::after {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            width: 25px;
+            height: 25px;
+            background: #222;
+            border: 2px solid #7f8c8d;
+            border-radius: 50%;
+            box-shadow: inset 0 0 5px rgba(0,0,0,1);
+        }
+        .train-car::before { left: 15%; }
+        .train-car::after { right: 15%; }
+
+        .options { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; flex-grow: 1; margin-bottom: 10px;}
+        .option { padding: 15px; font-size: 24px; display: flex; align-items: center; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
+        
+        #status-board { padding: 15px; background: #d35400; color: white; font-size: 28px; border-radius: 10px; font-weight: bold; text-align: center; display: none; box-shadow: 0 0 15px rgba(0,0,0,0.8); transition: 0.3s;}
+        #timer { font-size: 50px; color: #fff; margin-top: 5px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);}
+        #answer-display { font-size: 24px; font-weight: bold; text-align: center; min-height: 35px; margin-top: 5px; text-shadow: 1px 1px 5px rgba(0,0,0,0.8);}
+
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .controls button { font-size: 18px; padding: 15px 10px; border: none; border-radius: 8px; cursor: pointer; color: white; font-weight: bold; transition: 0.2s; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);}
+        .controls button:hover { filter: brightness(1.1); transform: scale(1.02);}
+        #btn-next { background-color: var(--btn-blue); grid-column: span 2; font-size: 22px;}
+        #btn-reset { background-color: var(--btn-red); }
+        #btn-reveal { background-color: var(--btn-purple); display: none;} 
+
+        .score-section h2 { margin: 0 0 15px 0; color: var(--text-gold); text-align: center; font-size: 24px;}
+        .scoreboard { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding-bottom: 10px;}
+        
+        .team-score { padding: 15px 10px; font-size: 22px; text-align: center; }
+        .team-score span { display: block; font-size: 36px; font-weight: bold; color: var(--btn-green); margin-top: 5px;}
+        
+        .blind-mode { filter: blur(10px) brightness(0.5); pointer-events: none; transition: 2s;}
+    </style>
+</head>
+<body>
+    <div class="stars"></div>
+
+    <div id="intro-screen">
+        <h1>🚂 飛天夢想列車</h1>
+        <h2>夢想列車長の最終考核</h2>
+        <button id="btn-start-adventure" onclick="startAdventure()" disabled>題庫讀取中...</button>
+    </div>
+
+    <h1 class="main-header" id="main-title" style="display:none;">🚂 夢想列車長の最終考核</h1>
+
+    <div class="layout-wrapper" id="game-layout">
+        <div class="main-panel">
+            <div class="panel" style="flex-grow: 1; display: flex; flex-direction: column;">
+                <div id="question-box">載入中...</div>
+                <div class="options">
+                    <div class="option train-car" id="opt-A">A： </div>
+                    <div class="option train-car" id="opt-B">B： </div>
+                    <div class="option train-car" id="opt-C">C： </div>
+                    <div class="option train-car" id="opt-D">D： </div>
+                </div>
+            </div>
+
+            <div id="status-board">
+                <span id="buzzer-status">準備中...</span>
+                <div id="timer"></div>
+            </div>
+            <div id="answer-display"></div>
+        </div>
+
+        <div class="side-panel">
+            <div class="panel controls">
+                <button id="btn-next" onclick="loadNextQuestion()">出發！下一題</button>
+                <button id="btn-reveal" onclick="judgeAnswer()">揭曉答案</button>
+                <button id="btn-reset" onclick="resetBuzzer()">重新開放搶答</button>
+            </div>
+
+            <div class="panel score-section" style="flex-grow: 1;">
+                <h2>🏆 小隊積分排行榜 <br><span id="blind-alert" style="color:#e74c3c; display:none; font-size: 16px;">(🙈 秘密計分啟動！)</span></h2>
+                <div class="scoreboard" id="scoreboard">
+                    <div class="team-score train-car">直升機<span id="score-直升機">0</span></div>
+                    <div class="team-score train-car">帆船<span id="score-帆船">0</span></div>
+                    <div class="team-score train-car">飛碟<span id="score-飛碟">0</span></div>
+                    <div class="team-score train-car">時光機<span id="score-時光機">0</span></div>
+                    <div class="team-score train-car">雪橇<span id="score-雪橇">0</span></div>
+                    <div class="team-score train-car">飛行傘<span id="score-飛行傘">0</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function startAdventure() {
+            const intro = document.getElementById('intro-screen');
+            const layout = document.getElementById('game-layout');
+            const title = document.getElementById('main-title');
+            
+            intro.style.transform = 'translateX(-100vw)';
+            intro.style.opacity = '0';
+            
+            setTimeout(() => {
+                intro.style.display = 'none';
+                title.style.display = 'block';
+                layout.style.display = 'flex';
+                setTimeout(() => { 
+                    layout.style.opacity = '1'; 
+                    loadNextQuestion();
+                }, 50);
+            }, 1500); 
+        }
+
+        const socket = io();
+        const sheetUrl = "https://docs.google.com/spreadsheets/d/131tATTJIavuktl_6dy26rwnPhJUW1EL3jrgTY6cT-q4/export?format=csv";
+        let questions = [];
+        let currentIndex = -1;
+        let countdownInterval;
+        let currentCorrectAnswer = "";
+        let currentAnsweringTeam = "";
+        let currentSubmittedAnswer = "";
+        
+        let scores = { "直升機": 0, "帆船": 0, "飛碟": 0, "時光機": 0, "雪橇": 0, "飛行傘": 0 };
+
+        window.onload = () => {
+            Papa.parse(sheetUrl, {
+                download: true,
+                header: false,
+                complete: function(results) {
+                    questions = results.data.slice(1).filter(row => row[1]); 
+                    console.log("成功載入題庫！共", questions.length, "題");
+                    
+                    const startBtn = document.getElementById('btn-start-adventure');
+                    startBtn.innerText = "✨ 開始進行考驗 ✨";
+                    startBtn.disabled = false;
+                }
+            });
+        };
+
+        function loadNextQuestion() {
+            if(currentIndex >= questions.length - 1) {
+                alert("考核結束！準備看最終排名！");
+                return;
+            }
+            currentIndex++;
+            const q = questions[currentIndex];
+            
+            document.getElementById('question-box').innerText = `第 ${q[0]} 題：${q[1]}`;
+            document.getElementById('opt-A').innerText = `A： ${q[2] || ''}`; 
+            document.getElementById('opt-B').innerText = `B： ${q[3] || ''}`;
+            document.getElementById('opt-C').innerText = `C： ${q[4] || ''}`;
+            document.getElementById('opt-D').innerText = `D： ${q[5] || ''}`;
+            
+            currentCorrectAnswer = q[6]; 
+            resetStateForNewAction(); 
+
+            checkBlindMode();
+            
+            document.getElementById('status-board').style.display = 'block';
+            document.getElementById('status-board').style.background = '#e67e22'; 
+            document.getElementById('buzzer-status').innerText = "請看題目...";
+            document.getElementById('timer').innerText = "";
+            
+            setTimeout(() => { startBuzzCountdown(); }, 1500);
+        }
+
+        function startBuzzCountdown() {
+            let count = 3;
+            document.getElementById('buzzer-status').innerText = `準備搶答... ${count}`;
+            
+            let preTimer = setInterval(() => {
+                count--;
+                if(count > 0) {
+                    document.getElementById('buzzer-status').innerText = `準備搶答... ${count}`;
+                } else {
+                    clearInterval(preTimer);
+                    document.getElementById('buzzer-status').innerText = "🔥 開放搶答！！！";
+                    document.getElementById('status-board').style.background = '#e74c3c';
+                    socket.emit('host-open-buzzer'); 
+                }
+            }, 1000);
+        }
+
+        function resetStateForNewAction() {
+            document.getElementById('answer-display').innerText = "";
+            document.getElementById('btn-reveal').style.display = 'none';
+            currentAnsweringTeam = "";
+            currentSubmittedAnswer = "";
+            clearInterval(countdownInterval);
+        }
+
+        function resetBuzzer() {
+            socket.emit('host-reset-buzzer');
+            resetStateForNewAction();
+            document.getElementById('status-board').style.display = 'block';
+            document.getElementById('status-board').style.background = '#e67e22';
+            startBuzzCountdown(); 
+        }
+
+        function judgeAnswer() {
+            if (!currentAnsweringTeam || !currentSubmittedAnswer) return;
+
+            document.getElementById('btn-reveal').style.display = 'none'; 
+
+            if (currentSubmittedAnswer === currentCorrectAnswer) {
+                document.getElementById('answer-display').innerHTML = `<span style="color:#2ecc71;">🎉 回答正確！${currentAnsweringTeam} 成功獲得 1 分！</span>`;
+                document.getElementById('status-board').style.background = '#2ecc71';
+                document.getElementById('buzzer-status').innerText = "答對了！";
+                
+                if (scores[currentAnsweringTeam] !== undefined) {
+                    scores[currentAnsweringTeam] += 1;
+                    document.getElementById(`score-${currentAnsweringTeam}`).innerText = scores[currentAnsweringTeam];
+                }
+            } else {
+                document.getElementById('answer-display').innerHTML = `<span style="color:#e74c3c;">❌ 喔不，答錯了！準備重新開放搶答...</span>`;
+                document.getElementById('status-board').style.background = '#c0392b';
+                document.getElementById('buzzer-status').innerText = "答錯了！";
+                
+                setTimeout(() => { resetBuzzer(); }, 2500);
+            }
+        }
+
+        function checkBlindMode() {
+            let remaining = questions.length - currentIndex;
+            const scoreboard = document.getElementById('scoreboard');
+            const alertText = document.getElementById('blind-alert');
+            
+            if (remaining <= 10) {
+                scoreboard.classList.add('blind-mode');
+                alertText.style.display = 'inline';
+            } else {
+                scoreboard.classList.remove('blind-mode');
+                alertText.style.display = 'none';
+            }
+        }
+
+        socket.on('team-buzzed', (team) => {
+            currentAnsweringTeam = team;
+            document.getElementById('status-board').style.background = '#27ae60'; 
+            document.getElementById('buzzer-status').innerText = `⚡ ${team} 搶到了！請作答`;
+            
+            let timeLeft = 10;
+            document.getElementById('timer').innerText = timeLeft;
+            
+            countdownInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer').innerText = timeLeft;
+                if(timeLeft <= 0) {
+                    clearInterval(countdownInterval);
+                    document.getElementById('buzzer-status').innerText = `⏰ 時間到！請站長判定`;
+                    document.getElementById('status-board').style.background = '#7f8c8d';
+                    document.getElementById('btn-reveal').style.display = 'inline-block'; 
+                }
+            }, 1000);
+        });
+
+        socket.on('answer-received', (data) => {
+            clearInterval(countdownInterval);
+            currentSubmittedAnswer = data.answer; 
+            document.getElementById('buzzer-status').innerText = `${data.teamName} 選擇了： ${data.answer}`;
+            document.getElementById('btn-reveal').style.display = 'inline-block'; 
+        });
+    </script>
+</body>
+</html>

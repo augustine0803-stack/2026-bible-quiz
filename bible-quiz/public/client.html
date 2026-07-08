@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>飛天夢想列車 - 作答區</title>
+    <style>
+        body { font-family: '微軟正黑體', sans-serif; background: linear-gradient(135deg, #050a15 0%, #0c1f40 50%, #153252 100%); color: #ecf0f1; text-align: center; margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+        
+        .stars { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; background-image: radial-gradient(2px 2px at 20px 30px, #eee, rgba(0,0,0,0)), radial-gradient(2px 2px at 40px 70px, #fff, rgba(0,0,0,0)), radial-gradient(2px 2px at 50px 160px, #ddd, rgba(0,0,0,0)), radial-gradient(2px 2px at 90px 40px, #fff, rgba(0,0,0,0)); background-repeat: repeat; background-size: 200px 200px; animation: twinkle 4s infinite; }
+        @keyframes twinkle { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+
+        h2 { color: #f5d76e; font-size: 32px; margin: 10px 0; text-shadow: 0 2px 10px rgba(245, 215, 110, 0.4);}
+        h3 { color: #bdc3c7; font-size: 24px; }
+        
+        #login-area { padding: 20px; background: rgba(0,0,0,0.5); margin: 20px; border-radius: 20px; backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.1); }
+        select { font-size: 28px; padding: 15px; width: 80%; border-radius: 10px; border: 2px solid #3498db; background: rgba(255,255,255,0.9); margin-bottom: 30px; }
+        .btn-join { background-color: #f39c12; color: white; font-size: 28px; padding: 15px 40px; border: none; border-radius: 50px; cursor: pointer; box-shadow: 0 5px 15px rgba(243, 156, 18, 0.4); width: 80%; font-weight: bold;}
+        
+        #game-area { display: none; padding: 20px; height: 100%; box-sizing: border-box; }
+        #team-display { background: #2ecc71; color: white; padding: 10px 20px; border-radius: 10px; display: inline-block; font-size: 28px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(46, 204, 113, 0.4); }
+        
+        #buzzer-btn { background: linear-gradient(145deg, #ff4757, #ff6b81); color: white; width: 90%; height: 50vh; font-size: 60px; font-weight: bold; border: none; border-radius: 30px; box-shadow: 0 15px 0 #c0392b, 0 25px 20px rgba(0,0,0,0.5); margin: 20px auto; display: none; cursor: pointer; transition: 0.1s; }
+        #buzzer-btn:active { transform: translateY(15px); box-shadow: 0 0 0 #c0392b, 0 10px 10px rgba(0,0,0,0.5); }
+        
+        #options-area { display: none; margin-top: 10px; }
+        #client-timer { font-size: 60px; color: #f5d76e; margin: 10px 0; font-weight: bold; text-shadow: 0 0 15px rgba(245, 215, 110, 0.6); }
+        .ans-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; }
+        .ans-btn { background: rgba(52, 152, 219, 0.8); backdrop-filter: blur(5px); border: 2px solid #2980b9; color: white; font-size: 40px; font-weight: bold; padding: 30px 0; border-radius: 20px; box-shadow: 0 8px 0 #1f618d; cursor: pointer; }
+        .ans-btn:active { transform: translateY(8px); box-shadow: none; }
+    </style>
+</head>
+<body>
+    <div class="stars"></div>
+
+    <div id="login-area">
+        <h2>🚂 夢想列車長の最終考核</h2>
+        <p style="font-size: 20px; color: #bdc3c7;">選擇小隊，準備發車！</p>
+        <select id="team-select">
+            <option value="直升機">直升機</option>
+            <option value="帆船">帆船</option>
+            <option value="飛碟">飛碟</option>
+            <option value="時光機">時光機</option>
+            <option value="雪橇">雪橇</option>
+            <option value="飛行傘">飛行傘</option>
+        </select>
+        <button class="btn-join" onclick="joinGame()">確認發車</button>
+    </div>
+
+    <div id="game-area">
+        <div id="team-display"></div>
+        <h3 id="status-text">👀 請看大螢幕等待題目...</h3>
+        
+        <button id="buzzer-btn" onclick="buzz()">搶答！</button>
+
+        <div id="options-area">
+            <h3 style="color:#ecf0f1; margin:0;">⏱ 剩餘作答時間</h3>
+            <div id="client-timer">10</div>
+            <div class="ans-grid">
+                <button class="ans-btn" onclick="submitAnswer('A')">A</button>
+                <button class="ans-btn" onclick="submitAnswer('B')">B</button>
+                <button class="ans-btn" onclick="submitAnswer('C')">C</button>
+                <button class="ans-btn" onclick="submitAnswer('D')">D</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let myTeam = "";
+        let clientTimerInterval;
+
+        function joinGame() {
+            const selectedTeam = document.getElementById('team-select').value;
+            
+            // 向伺服器確認該隊伍是否已經有人登入
+            socket.emit('player-login', selectedTeam, (response) => {
+                if (response.success) {
+                    myTeam = selectedTeam;
+                    document.getElementById('login-area').style.display = 'none';
+                    document.getElementById('game-area').style.display = 'block';
+                    document.getElementById('team-display').innerText = myTeam;
+                } else {
+                    alert(response.message);
+                }
+            });
+        }
+
+        socket.on('buzzer-opened', () => {
+            document.getElementById('status-text').innerText = "快按搶答！";
+            document.getElementById('buzzer-btn').style.display = 'block';
+            document.getElementById('options-area').style.display = 'none';
+            if (navigator.vibrate) navigator.vibrate(200); 
+        });
+
+        function buzz() {
+            socket.emit('player-buzz', myTeam);
+            document.getElementById('buzzer-btn').style.display = 'none';
+        }
+
+        socket.on('team-buzzed', (winningTeam) => {
+            document.getElementById('buzzer-btn').style.display = 'none';
+            
+            if (winningTeam === myTeam) {
+                document.getElementById('status-text').innerText = "🎉 搶到了！快作答！";
+                document.getElementById('options-area').style.display = 'block';
+                if (navigator.vibrate) navigator.vibrate([100, 100, 100]); 
+                
+                let timeLeft = 10;
+                document.getElementById('client-timer').innerText = timeLeft;
+                clearInterval(clientTimerInterval);
+                clientTimerInterval = setInterval(() => {
+                    timeLeft--;
+                    document.getElementById('client-timer').innerText = timeLeft;
+                    if(timeLeft <= 0) {
+                        clearInterval(clientTimerInterval);
+                        document.getElementById('options-area').style.display = 'none';
+                        document.getElementById('status-text').innerText = "⏳ 時間到！請看大螢幕";
+                    }
+                }, 1000);
+
+            } else {
+                document.getElementById('status-text').innerText = `❌ 被 ${winningTeam} 搶走了...`;
+            }
+        });
+
+        function submitAnswer(ans) {
+            socket.emit('player-submit-answer', { teamName: myTeam, answer: ans });
+            clearInterval(clientTimerInterval); 
+            document.getElementById('options-area').style.display = 'none';
+            document.getElementById('status-text').innerText = `✅ 已選擇 ${ans}，請看大螢幕判定`;
+        }
+
+        socket.on('buzzer-reset', () => {
+            clearInterval(clientTimerInterval);
+            document.getElementById('status-text').innerText = "👀 請看大螢幕等待...";
+            document.getElementById('buzzer-btn').style.display = 'none';
+            document.getElementById('options-area').style.display = 'none';
+        });
+    </script>
+</body>
+</html>
